@@ -1,4 +1,4 @@
-module github.com/zeiss/template-go
+module github.com/zeiss/go-transform
 
 go 1.22.1
 
