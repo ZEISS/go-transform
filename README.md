@@ -1,35 +1,13 @@
-# :partying_face: Template Go
+# Transform
 
-> This is a GitHub Template Repository. You can use the green button to create a new repository based on this template. Read more about [GitHub Template Repositories](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template).
+[![Test & Build](https://github.com/zeiss/go-transform/actions/workflows/main.yml/badge.svg)](https://github.com/zeiss/go-transform/actions/workflows/main.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/zeiss/go-transform.svg)](https://pkg.go.dev/github.com/zeiss/go-transform)
+[![Go Report Card](https://goreportcard.com/badge/github.com/zeiss/go-transform)](https://goreportcard.com/report/github.com/zeiss/go-transform)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Taylor Swift](https://img.shields.io/badge/secured%20by-taylor%20swift-brightgreen.svg)](https://twitter.com/SwiftOnSecurity)
 
-## Get Started
+Transform is a Go library that provides a simple way to transform data from one format to another.
 
-This template supports `Makefile` to run tooling.
+## License
 
-> `make` is choosen as it is available on most systems.
-
-```bash
-# show `help`
-make help
-```
-
-## Setup
-
-Setup the project.
-
-```bash
-make setup MODULE_NAME=github.com/username/repo
-```
-
-Other available targets are
-
-* `build`
-* `fmt`
-* `lint`
-* `vet`
-* `generate`
-* `clean`
-
-The convention is to use `make` to run the build.
-
-Happy coding!
+[MIT](/LICENSE)
