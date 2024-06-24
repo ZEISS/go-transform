@@ -9,7 +9,7 @@ import (
 )
 
 func TestStruct(t *testing.T) {
-	transform := transform.New()
+	trans := transform.NewTransformer()
 
 	tests := []struct {
 		name string
@@ -43,7 +43,7 @@ func TestStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := transform.Struct(tt.in)
+			err := trans.Transform(tt.name, tt.in)
 			require.NoError(t, err)
 		})
 	}
