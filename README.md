@@ -8,6 +8,34 @@
 
 Transform is a Go library that provides a simple way to transform data from one format to another.
 
+## Installation
+
+```bash
+go get github.com/zeiss/go-transform
+```
+
+## Usage
+
+```go
+type example struct {
+  Name string `tansform:"trim,lowercase"`
+}
+
+t := transform.New()
+e := example{Name: "  John Doe  "}
+
+if err := t.Transform(&e); err != nil {
+  log.Fatal(err)
+}
+
+fmt.Println(e.Name) // Output: john doe
+```
+
+## Transformations
+
+* `trim` - Removes leading and trailing whitespace.
+* `lowercase` - Converts the string to lowercase.
+
 ## License
 
 [MIT](/LICENSE)

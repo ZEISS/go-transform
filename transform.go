@@ -27,11 +27,32 @@ type FieldLevel interface {
 type Func func(fl FieldLevel) error
 
 var internalTransformers = map[string]Func{
-	"trim": trimFunc,
+	"trim":       trimFunc,
+	"trim_left":  trimLeftFunc,
+	"trim_right": trimRightFunc,
+	"lowercase":  toLowerCaseFunc,
+}
+
+func trimLeftFunc(fl FieldLevel) error {
+	fl.Field().SetString(strings.TrimLeft(fl.Field().String(), " "))
+
+	return nil
+}
+
+func trimRightFunc(fl FieldLevel) error {
+	fl.Field().SetString(strings.TrimRight(fl.Field().String(), " "))
+
+	return nil
 }
 
 func trimFunc(fl FieldLevel) error {
 	fl.Field().SetString(strings.TrimSpace(fl.Field().String()))
+
+	return nil
+}
+
+func toLowerCaseFunc(fl FieldLevel) error {
+	fl.Field().SetString(strings.ToLower(fl.Field().String()))
 
 	return nil
 }
@@ -100,10 +121,10 @@ func WithTagName(tagName string) TransformerOpt {
 }
 
 // Transform ...
-func Transform(name string, s interface{}) error {
+func Transform(s interface{}) error {
 	t := NewTransformer()
 
-	return t.Transform(name, s)
+	return t.Transform(s)
 }
 
 // NewTransformer ...
@@ -120,7 +141,7 @@ func NewTransformer(opts ...TransformerOpt) *TransformerImpl {
 }
 
 // Transform ...
-func (t *TransformerImpl) Transform(name string, s interface{}) error {
+func (t *TransformerImpl) Transform(s interface{}) error {
 	val := reflect.ValueOf(s)
 	if val.Kind() != reflect.Ptr {
 		return ErrNoPointer
