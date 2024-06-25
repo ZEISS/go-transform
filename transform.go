@@ -1,17 +1,81 @@
 package transform
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const (
 	defaultTagName = "transform"
+)
+
+// FieldLevel ...
+type FieldLevel interface {
+	// GetTag returns the current validation tag name
+	GetTag() string
+	// FieldName returns the current field name+
+	FieldName() string
+	// Field returns the current field value
+	Field() reflect.Value
+	// Funcs is returning the list of tag functions
+	Funcs() []string
+}
+
+// Func transforms the field value
+type Func func(fl FieldLevel) error
+
+var internalTransformers = map[string]Func{
+	"trim": trimFunc,
+}
+
+func trimFunc(fl FieldLevel) error {
+	fl.Field().SetString(strings.TrimSpace(fl.Field().String()))
+
+	return nil
+}
+
+var _ FieldLevel = &fieldLevel{}
+
+type fieldLevel struct {
+	field   reflect.StructField
+	val     reflect.Value
+	json    bool
+	tagName string
+}
+
+// Field ...
+func (fl fieldLevel) Field() reflect.Value {
+	return fl.val
+}
+
+// FieldName ...
+func (fl fieldLevel) FieldName() string {
+	return fl.field.Name
+}
+
+// GetTag ...
+func (fl fieldLevel) GetTag() string {
+	return fl.field.Tag.Get(fl.tagName)
+}
+
+// Parent ...
+func (fl fieldLevel) Parent() reflect.Value {
+	return fl.val
+}
+
+// Funcs ...
+func (fl fieldLevel) Funcs() []string {
+	tag := fl.GetTag()
+	return strings.Split(tag, ",")
+}
+
+var (
+	// ErrNoPointer is returned when the interface is not a pointer
+	ErrNoPointer = errors.New("transformer: interface must be a pointer")
+	// ErrNoAddressable is returned when the interface is not addressable
+	ErrNoAddressable = errors.New("transformer: interface must be addressable (a pointer)")
 )
 
 // Transformer ...
@@ -27,6 +91,13 @@ type TransformerImpl struct {
 
 // TransformerOpt ...
 type TransformerOpt func(o *TransformerImpl)
+
+// WithTagName ...
+func WithTagName(tagName string) TransformerOpt {
+	return func(o *TransformerImpl) {
+		o.TagName = tagName
+	}
+}
 
 // Transform ...
 func Transform(name string, s interface{}) error {
@@ -52,93 +123,66 @@ func NewTransformer(opts ...TransformerOpt) *TransformerImpl {
 func (t *TransformerImpl) Transform(name string, s interface{}) error {
 	val := reflect.ValueOf(s)
 	if val.Kind() != reflect.Ptr {
-		return errors.New("kvstructure: interface must be a pointer")
+		return ErrNoPointer
 	}
 
 	val = val.Elem()
 	if !val.CanAddr() {
-		return errors.New("kvstructure: interface must be addressable (a pointer)")
+		return ErrNoAddressable
 	}
 
-	return t.transform(name, reflect.ValueOf(s).Elem())
+	return t.transform(val)
 }
 
 // transcode is doing the heavy lifting in the background
-func (t *TransformerImpl) transform(name string, val reflect.Value) error {
+func (t *TransformerImpl) transform(val reflect.Value, field ...FieldLevel) error {
 	var err error
+
 	valKind := getKind(reflect.Indirect(val))
-	switch valKind {
-	// case reflect.String:
-	// 	err = t.transcodeString(name, val)
-	// case reflect.Bool:
-	// 	err = t.transcodeBool(name, val)
-	// case reflect.Int:
-	// 	err = t.transcodeInt(name, val)
-	// case reflect.Uint:
-	// 	err = t.transcodeUint(name, val)
-	// case reflect.Float32:
-	// 	err = t.transcodeFloat(name, val)
-	// case reflect.Struct:
-	// 	err = t.transcodeStruct(name, val)
-	// case reflect.Slice:
-	// 	// silent do nothing
-	// 	err = t.transcodeSlice(name, val)
-	default:
-		// we have to work on here for value to pointed to
-		return fmt.Errorf("kvstructure: unsupported type %s", valKind)
+
+	fmt.Println(field)
+
+	if len(field) > 0 {
+		valKind = getKind(field[0].Field())
 	}
 
-	// should be nil
-	return err
+	switch valKind {
+	case reflect.String, reflect.Bool, reflect.Int, reflect.Uint, reflect.Float32:
+		err = t.transformType(field[0])
+	case reflect.Struct:
+		err = t.transformStruct(val)
+	case reflect.Interface:
+		return t.transform(reflect.ValueOf(val.Interface()))
+	default:
+		// we have to work on here for value to pointed to
+		return fmt.Errorf("transformer: unsupported type %s", valKind)
+	}
+
+	return err // should be nil
 }
 
-// transdecodeString
-func (t *TransformerImpl) transformString(name string, val reflect.Value) error {
-	return nil
-}
+// transcodeType
+func (t *TransformerImpl) transformType(field FieldLevel) error {
+	fmt.Println("transformType")
 
-func (t *TransformerImpl) transformBool(name string, val reflect.Value) error {
-	return nil
-}
+	fn, ok := internalTransformers["trim"]
+	if !ok {
+		return nil
+	}
 
-func (t *TransformerImpl) transformInt(name string, val reflect.Value) error {
-	return nil
-}
-
-func (t *TransformerImpl) transformUint(name string, val reflect.Value) error {
-	return nil
-}
-
-func (t *TransformerImpl) transformFloat(name string, val reflect.Value) error {
-	return nil
-}
-
-func (t *TransformerImpl) transformSlice(name string, val reflect.Value) error {
-	return nil
+	return fn(field)
 }
 
 // transdecodeStruct
-func (t *TransformerImpl) transformStruct(name string, val reflect.Value) error {
+func (t *TransformerImpl) transformStruct(val reflect.Value) error {
 	valInterface := reflect.Indirect(val)
 	valType := valInterface.Type()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// create an errgroup to trace the latest error and return
-	g, _ := errgroup.WithContext(ctx)
-
-	// The slice will keep track of all structs we'll be transcoding.
-	// There can be more structs, if we have embedded structs that are squashed.
+	// Thes slice will keep track of all struct to transform
 	structs := make([]reflect.Value, 1, 5)
 	structs[0] = val
 
-	type field struct {
-		field reflect.StructField
-		val   reflect.Value
-		json  bool
-	}
-	fields := []field{}
+	fields := []fieldLevel{}
 
 	for len(structs) > 0 {
 		structVal := structs[0]
@@ -146,6 +190,7 @@ func (t *TransformerImpl) transformStruct(name string, val reflect.Value) error 
 
 		for i := 0; i < valType.NumField(); i++ {
 			fieldType := valType.Field(i)
+
 			isJSON := false
 
 			// detected if this field is json
@@ -153,24 +198,18 @@ func (t *TransformerImpl) transformStruct(name string, val reflect.Value) error 
 				isJSON = true
 			}
 
-			fields = append(fields, field{fieldType, structVal.Elem().Field(i), isJSON})
+			fields = append(fields, fieldLevel{fieldType, structVal.Field(i), isJSON, t.TagName})
 		}
 	}
 
 	// evaluate all fields
 	for _, f := range fields {
 		field, val, isJSON := f.field, f.val, f.json
-		kv := strings.ToLower(field.Name)
 
 		tag := field.Tag.Get(t.TagName)
 		tag = strings.SplitN(tag, ",", 2)[0]
-		if tag != "" {
-			kv = tag
-		}
 
-		if name != "" {
-			kv = strings.Join([]string{name, kv}, "/")
-		}
+		fmt.Println("here", val.CanAddr())
 
 		if !val.CanAddr() {
 			continue
@@ -191,17 +230,14 @@ func (t *TransformerImpl) transformStruct(name string, val reflect.Value) error 
 			continue
 		}
 
-		g.Go(func() error {
-			if err := t.transform(kv, val); err != nil {
-				return err
-			}
+		fmt.Print("tag: ", tag, "\n")
 
-			return nil
-		})
-	}
+		if err := t.transform(val, f); err != nil {
+			return err
+		}
 
-	if err := g.Wait(); err != nil {
-		return err
+		return nil
+
 	}
 
 	return nil

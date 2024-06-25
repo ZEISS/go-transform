@@ -29,12 +29,12 @@ func TestStruct(t *testing.T) {
 		{
 			name: "string",
 			in: struct {
-				Name string `transform:"trim"`
+				Name string `transform:"trim,lowercase"`
 			}{
 				Name: "  test  ",
 			},
 			out: struct {
-				Name string `transform:"trim"`
+				Name string `transform:"trim,lowercase"`
 			}{
 				Name: "test",
 			},
@@ -43,8 +43,9 @@ func TestStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := trans.Transform(tt.name, tt.in)
+			err := trans.Transform(tt.name, &tt.in)
 			require.NoError(t, err)
+			require.Equal(t, tt.out, tt.in)
 		})
 	}
 }
