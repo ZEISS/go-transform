@@ -11,10 +11,14 @@ import (
 func TestStruct(t *testing.T) {
 	trans := transform.NewTransformer()
 
+	type testStruct struct {
+		Name string `transform:"trim"`
+	}
+
 	tests := []struct {
 		name string
-		in   interface{}
-		out  interface{}
+		in   *testStruct
+		out  *testStruct
 	}{
 		{
 			name: "nil",
@@ -23,19 +27,15 @@ func TestStruct(t *testing.T) {
 		},
 		{
 			name: "empty",
-			in:   struct{}{},
-			out:  struct{}{},
+			in:   &testStruct{},
+			out:  &testStruct{},
 		},
 		{
 			name: "string",
-			in: struct {
-				Name string `transform:"trim,lowercase"`
-			}{
+			in: &testStruct{
 				Name: "  test  ",
 			},
-			out: struct {
-				Name string `transform:"trim,lowercase"`
-			}{
+			out: &testStruct{
 				Name: "test",
 			},
 		},
@@ -43,7 +43,7 @@ func TestStruct(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := trans.Transform(tt.name, &tt.in)
+			err := trans.Transform(tt.name, tt.in)
 			require.NoError(t, err)
 			require.Equal(t, tt.out, tt.in)
 		})
