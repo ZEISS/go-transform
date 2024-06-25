@@ -33,8 +33,16 @@ fmt.Println(e.Name) // Output: john doe
 
 ## Transformations
 
-* `trim` - Removes leading and trailing whitespace.
-* `lowercase` - Converts the string to lowercase.
+This is the list of all available transformations:
+
+| Function | Description |
+| --- | --- |
+| `trim` | Removes leading and trailing whitespace. |
+| `lowercase` | Converts the string to lowercase. |
+| `uppercase` | Converts the string to uppercase. |
+| `trim_right` | Removes trailing whitespace. |
+| `trim_left` | Removes leading whitespace. |
+| `uppercase` | Converts the string to uppercase. |
 
 ## License
 

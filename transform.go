@@ -31,6 +31,13 @@ var internalTransformers = map[string]Func{
 	"trim_left":  trimLeftFunc,
 	"trim_right": trimRightFunc,
 	"lowercase":  toLowerCaseFunc,
+	"uppercase":  toUpperCaseFunc,
+}
+
+func toUpperCaseFunc(fl FieldLevel) error {
+	fl.Field().SetString(strings.ToUpper(fl.Field().String()))
+
+	return nil
 }
 
 func trimLeftFunc(fl FieldLevel) error {
