@@ -169,6 +169,7 @@ func (t *TransformerImpl) transform(val reflect.Value, field ...FieldLevel) erro
 		valKind = getKind(field[0].Field())
 	}
 
+	// nolint: exhaustive
 	switch valKind {
 	case reflect.String, reflect.Bool, reflect.Int, reflect.Uint, reflect.Float32:
 		err = t.transformType(field[0])
@@ -199,6 +200,7 @@ func (t *TransformerImpl) transformType(field FieldLevel) error {
 }
 
 // transdecodeStruct
+// nolint: gocyclo
 func (t *TransformerImpl) transformStruct(val reflect.Value) error {
 	valInterface := reflect.Indirect(val)
 	valType := valInterface.Type()
