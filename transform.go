@@ -2,13 +2,12 @@ package transform
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 )
 
 const (
-	defaultTagName = "transform"
+	DefaultTagName = "transform"
 )
 
 // FieldLevel ...
@@ -21,50 +20,54 @@ type FieldLevel interface {
 	Field() reflect.Value
 	// Funcs is returning the list of tag functions
 	Funcs() []string
+	// Kind returns the kind of the field
+	Kind() reflect.Kind
+	// String returns the string value of the field
+	String() string
 }
 
 // Func transforms the field value
 type Func func(fl FieldLevel) error
 
 var internalTransformers = map[string]Func{
-	"trim":       trimFunc,
-	"trim_left":  trimLeftFunc,
-	"trim_right": trimRightFunc,
-	"lowercase":  toLowerCaseFunc,
-	"uppercase":  toUpperCaseFunc,
+	"trim":      trimFunc,
+	"ltrim":     trimLeftFunc,
+	"rtrim":     trimRightFunc,
+	"lowercase": toLowerCaseFunc,
+	"uppercase": toUpperCaseFunc,
 }
 
 func toUpperCaseFunc(fl FieldLevel) error {
-	fl.Field().SetString(strings.ToUpper(fl.Field().String()))
+	SetString(fl, strings.ToUpper(fl.String()))
 
 	return nil
 }
 
 func trimLeftFunc(fl FieldLevel) error {
-	fl.Field().SetString(strings.TrimLeft(fl.Field().String(), " "))
+	SetString(fl, strings.TrimLeft(fl.String(), " "))
 
 	return nil
 }
 
 func trimRightFunc(fl FieldLevel) error {
-	fl.Field().SetString(strings.TrimRight(fl.Field().String(), " "))
+	SetString(fl, strings.TrimRight(fl.String(), " "))
 
 	return nil
 }
 
 func trimFunc(fl FieldLevel) error {
-	fl.Field().SetString(strings.TrimSpace(fl.Field().String()))
+	SetString(fl, strings.TrimSpace(fl.String()))
 
 	return nil
 }
 
 func toLowerCaseFunc(fl FieldLevel) error {
-	fl.Field().SetString(strings.ToLower(fl.Field().String()))
+	SetString(fl, strings.ToLower(fl.String()))
 
 	return nil
 }
 
-var _ FieldLevel = &fieldLevel{}
+var _ FieldLevel = (*fieldLevel)(nil)
 
 type fieldLevel struct {
 	field   reflect.StructField
@@ -73,30 +76,39 @@ type fieldLevel struct {
 	tagName string
 }
 
-// Field ...
+// Field returns the current field value
 func (fl fieldLevel) Field() reflect.Value {
 	return fl.val
 }
 
-// FieldName ...
+// FieldName returns the current field name
 func (fl fieldLevel) FieldName() string {
 	return fl.field.Name
 }
 
-// GetTag ...
+// GetTag returns the current transform tag
 func (fl fieldLevel) GetTag() string {
 	return fl.field.Tag.Get(fl.tagName)
 }
 
-// Parent ...
-func (fl fieldLevel) Parent() reflect.Value {
-	return fl.val
-}
-
-// Funcs ...
+// Funcs return the list of tag functions
 func (fl fieldLevel) Funcs() []string {
 	tag := fl.GetTag()
 	return strings.Split(tag, ",")
+}
+
+// Kind returns the kind of the field
+func (fl fieldLevel) Kind() reflect.Kind {
+	return fl.val.Kind()
+}
+
+// String returns the string value of the field
+func (fl fieldLevel) String() string {
+	if fl.Kind() == reflect.Ptr {
+		return fl.Field().Elem().String()
+	}
+
+	return fl.Field().String()
 }
 
 var (
@@ -104,6 +116,8 @@ var (
 	ErrNoPointer = errors.New("transformer: interface must be a pointer")
 	// ErrNoAddressable is returned when the interface is not addressable
 	ErrNoAddressable = errors.New("transformer: interface must be addressable (a pointer)")
+	// ErrNoStruct is returned when the interface is not a struct
+	ErrNoStruct = errors.New("transformer: interface must be a struct")
 )
 
 // Transformer ...
@@ -137,7 +151,7 @@ func Transform(s interface{}) error {
 // NewTransformer ...
 func NewTransformer(opts ...TransformerOpt) *TransformerImpl {
 	t := new(TransformerImpl)
-	t.TagName = defaultTagName
+	t.TagName = DefaultTagName
 
 	// configure transformer
 	for _, o := range opts {
@@ -149,53 +163,81 @@ func NewTransformer(opts ...TransformerOpt) *TransformerImpl {
 
 // Transform ...
 func (t *TransformerImpl) Transform(s interface{}) error {
-	val := reflect.ValueOf(s)
-	if val.Kind() != reflect.Ptr {
+	ifv := reflect.ValueOf(s)
+
+	if ifv.IsNil() {
+		return nil // bail out of if this nil
+	}
+
+	if ifv.Kind() != reflect.Ptr { // we only accept pointer
 		return ErrNoPointer
 	}
 
-	if val.IsNil() {
-		return nil // bail out if nil
-	}
-
-	val = val.Elem()
-	if !val.CanAddr() {
+	ifv = ifv.Elem()
+	if !ifv.CanAddr() {
 		return ErrNoAddressable
 	}
 
-	return t.transform(val)
-}
-
-// transcode is doing the heavy lifting in the background
-func (t *TransformerImpl) transform(val reflect.Value, field ...FieldLevel) error {
-	var err error
-
-	valKind := getKind(reflect.Indirect(val))
-
-	if len(field) > 0 {
-		valKind = getKind(field[0].Field())
+	if ifv.Kind() != reflect.Struct {
+		return ErrNoStruct // we only support struct, because of the need of tags
 	}
 
-	// nolint: exhaustive
-	switch valKind {
-	case reflect.String, reflect.Bool, reflect.Int, reflect.Uint, reflect.Float32:
-		err = t.transformType(field[0])
-	case reflect.Struct:
-		err = t.transformStruct(val)
-	default:
-		// we have to work on here for value to pointed to
-		return fmt.Errorf("transformer: unsupported type %s", valKind)
-	}
-
-	return err // should be nil
+	return t.transform(ifv)
 }
 
-// transcodeType
-func (t *TransformerImpl) transformType(field FieldLevel) error {
+// this is the heavy lifting
+func (t *TransformerImpl) transform(ifv reflect.Value) error {
+	vif := reflect.Indirect(ifv)
+	vt := vif.Type()
+
+	fields := []FieldLevel{}
+
+	for i := 0; i < ifv.NumField(); i++ {
+		ft := vt.Field(i)
+
+		isJSON := false
+
+		// detected if this field is json
+		if ft.Tag.Get("json") != "" {
+			isJSON = true
+		}
+
+		fields = append(fields, fieldLevel{ft, ifv.Field(i), isJSON, t.TagName})
+	}
+
+	return t.transformFields(fields...)
+}
+
+// transformField
+func (t *TransformerImpl) transformFields(fields ...FieldLevel) error {
+	for _, f := range fields {
+		k := f.Kind()
+
+		if k == reflect.Ptr {
+			k = f.Field().Elem().Kind()
+		}
+
+		// nolint:exhaustive
+		switch k {
+		case reflect.String:
+			if f.Field().CanSet() {
+				if err := t.transformField(f); err != nil {
+					return err
+				}
+			}
+		default:
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func (t *TransformerImpl) transformField(field FieldLevel) error {
 	for _, f := range field.Funcs() {
 		fn, ok := internalTransformers[f]
 		if !ok {
-			return fmt.Errorf("transformer: function %s does not exist", f)
+			return nil // bail out if we don't have the function
 		}
 
 		if err := fn(field); err != nil {
@@ -206,85 +248,15 @@ func (t *TransformerImpl) transformType(field FieldLevel) error {
 	return nil
 }
 
-// transdecodeStruct
-// nolint: gocyclo
-func (t *TransformerImpl) transformStruct(val reflect.Value) error {
-	valInterface := reflect.Indirect(val)
-	valType := valInterface.Type()
-
-	// Thes slice will keep track of all struct to transform
-	structs := make([]reflect.Value, 1, 5)
-	structs[0] = val
-
-	fields := []fieldLevel{}
-
-	for len(structs) > 0 {
-		structVal := structs[0]
-		structs = structs[1:]
-
-		for i := 0; i < valType.NumField(); i++ {
-			fieldType := valType.Field(i)
-
-			isJSON := false
-
-			// detected if this field is json
-			if fieldType.Tag.Get("json") != "" {
-				isJSON = true
-			}
-
-			fields = append(fields, fieldLevel{fieldType, structVal.Field(i), isJSON, t.TagName})
-		}
+// SetString ...
+func SetString(f FieldLevel, s string) {
+	if f.Kind() == reflect.Ptr && f.Field().IsNil() {
+		return // we don't want to set nil
 	}
 
-	// evaluate all fields
-	for _, f := range fields {
-		field, val, isJSON := f.field, f.val, f.json
-
-		tag := field.Tag.Get(t.TagName)
-		tag = strings.SplitN(tag, ",", 2)[0]
-
-		if !val.CanAddr() {
-			continue
-		}
-
-		// we try to deal with json here
-		if isJSON && tag == "" {
-			if !val.CanAddr() {
-				continue
-			}
-
-			// check if we have to omit
-			tag := field.Tag.Get("json")
-			if tag == "-" {
-				continue
-			}
-
-			continue
-		}
-
-		if err := t.transform(val, f); err != nil {
-			return err
-		}
-
-		return nil
-
-	}
-
-	return nil
-}
-
-// getKind is returning the kind of the reflected value
-func getKind(val reflect.Value) reflect.Kind {
-	kind := val.Kind()
-
-	switch {
-	case kind >= reflect.Int && kind <= reflect.Int64:
-		return reflect.Int
-	case kind >= reflect.Uint && kind <= reflect.Uint64:
-		return reflect.Uint
-	case kind >= reflect.Float32 && kind <= reflect.Float64:
-		return reflect.Float32
-	default:
-		return kind
+	if f.Kind() == reflect.Ptr {
+		f.Field().Set(reflect.ValueOf(&s))
+	} else {
+		f.Field().SetString(s)
 	}
 }

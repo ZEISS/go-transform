@@ -39,11 +39,17 @@ func BenchmarkStruct(b *testing.B) {
 	}
 }
 
+func TestNewTransformer(t *testing.T) {
+	test := transform.NewTransformer()
+	require.NotNil(t, test)
+}
+
 func TestStruct(t *testing.T) {
 	trans := transform.NewTransformer()
 
 	type testStruct struct {
-		Name string `transform:"trim,lowercase"`
+		Name    string  `transform:"trim,lowercase"`
+		NamePtr *string `transform:"trim,lowercase"`
 	}
 
 	tests := []struct {
@@ -64,10 +70,12 @@ func TestStruct(t *testing.T) {
 		{
 			name: "string",
 			in: &testStruct{
-				Name: "  TEST  ",
+				Name:    "  TEST  ",
+				NamePtr: &[]string{"  TEST  "}[0],
 			},
 			out: &testStruct{
-				Name: "test",
+				Name:    "test",
+				NamePtr: &[]string{"test"}[0],
 			},
 		},
 	}
@@ -127,7 +135,7 @@ func TestStructTrimRight(t *testing.T) {
 	trans := transform.NewTransformer()
 
 	type testStruct struct {
-		Name string `transform:"trim_right"`
+		Name string `transform:"rtrim"`
 	}
 
 	tests := []struct {
@@ -169,7 +177,7 @@ func TestStructTrimLeft(t *testing.T) {
 	trans := transform.NewTransformer()
 
 	type testStruct struct {
-		Name string `transform:"trim_left"`
+		Name string `transform:"ltrim"`
 	}
 
 	tests := []struct {
