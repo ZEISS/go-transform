@@ -195,8 +195,11 @@ func (t *TransformerImpl) transform(ifv reflect.Value) error {
 	for i := 0; i < ifv.NumField(); i++ {
 		ft := vt.Field(i)
 
-		isJSON := false
+		if ft.Tag.Get(t.TagName) == "-" {
+			continue
+		}
 
+		isJSON := false
 		// detected if this field is json
 		if ft.Tag.Get("json") != "" {
 			isJSON = true

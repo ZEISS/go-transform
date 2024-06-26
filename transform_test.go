@@ -50,6 +50,7 @@ func TestStruct(t *testing.T) {
 	type testStruct struct {
 		Name    string  `transform:"trim,lowercase"`
 		NamePtr *string `transform:"trim,lowercase"`
+		Int     int     `transform:"trim"`
 	}
 
 	tests := []struct {
@@ -75,6 +76,51 @@ func TestStruct(t *testing.T) {
 			},
 			out: &testStruct{
 				Name:    "test",
+				NamePtr: &[]string{"test"}[0],
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := trans.Transform(tt.in)
+			require.NoError(t, err)
+			require.Equal(t, tt.out, tt.in)
+		})
+	}
+}
+
+func TestIgnore(t *testing.T) {
+	trans := transform.NewTransformer()
+
+	type testStruct struct {
+		Name    string  `transform:"-"`
+		NamePtr *string `transform:"trim,lowercase"`
+	}
+
+	tests := []struct {
+		name string
+		in   *testStruct
+		out  *testStruct
+	}{
+		{
+			name: "nil",
+			in:   nil,
+			out:  nil,
+		},
+		{
+			name: "empty",
+			in:   &testStruct{},
+			out:  &testStruct{},
+		},
+		{
+			name: "string",
+			in: &testStruct{
+				Name:    "  TEST  ",
+				NamePtr: &[]string{"  TEST  "}[0],
+			},
+			out: &testStruct{
+				Name:    "  TEST  ",
 				NamePtr: &[]string{"test"}[0],
 			},
 		},
