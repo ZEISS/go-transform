@@ -40,8 +40,8 @@ This is the list of all available transformations:
 | `trim` | Removes leading and trailing whitespace. |
 | `lowercase` | Converts the string to lowercase. |
 | `uppercase` | Converts the string to uppercase. |
-| `trim_right` | Removes trailing whitespace. |
-| `trim_left` | Removes leading whitespace. |
+| `rtrim` | Removes trailing whitespace. |
+| `ltrim` | Removes leading whitespace. |
 | `uppercase` | Converts the string to uppercase. |
 
 ## License
