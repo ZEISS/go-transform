@@ -7,7 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/golang/mock v1.6.0
 	github.com/golangci/golangci-lint v1.64.8
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	mvdan.cc/gofumpt v0.8.0
 )
 
