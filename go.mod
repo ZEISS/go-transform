@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/golang/mock v1.6.0
 	github.com/golangci/golangci-lint v1.64.8
-	github.com/stretchr/testify v1.12.0
+	github.com/stretchr/testify v1.12.1
 	mvdan.cc/gofumpt v0.11.0
 )
 
@@ -178,6 +178,7 @@ require (
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20250210185358-939b2ce775ac // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
