@@ -33,7 +33,7 @@ func BenchmarkStruct(b *testing.B) {
 		Name string `transform:"trim"`
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		err := trans.Transform(&testStruct{Name: "  test  "})
 		require.NoError(b, err)
 	}
@@ -51,6 +51,7 @@ func TestStruct(t *testing.T) {
 		Name    string  `transform:"trim,lowercase"`
 		NamePtr *string `transform:"trim,lowercase"`
 		Int     int     `transform:"trim"`
+		Slash   string  `transform:"to_slash"`
 	}
 
 	tests := []struct {

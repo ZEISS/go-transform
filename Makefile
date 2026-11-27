@@ -1,11 +1,20 @@
-.DEFAULT_GOAL := release
+.DEFAULT_GOAL := build
 
+# Go variables
 GO 						?= go
-GO_RUN_TOOLS 	?= $(GO) run -modfile ./tools/go.mod
-GO_TEST 			?= $(GO_RUN_TOOLS) gotest.tools/gotestsum --format pkgname
-GO_RELEASER 	?= $(GO_RUN_TOOLS) github.com/goreleaser/goreleaser
-GO_BENCHSTAT 	?= $(GO_RUN_TOOLS) golang.org/x/perf/cmd/benchstat
-GO_MOD 				?= $(shell ${GO} list -m)
+GO_TOOL 			?= $(GO) tool
+GO_RELEASER 	?= $(GO_TOOL) github.com/goreleaser/goreleaser/v2
+GO_LINT 			?= $(GO_TOOL) github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+GO_TEST 			?= $(GO_TOOL) gotest.tools/gotestsum --format pkgname
+GO_BENCHSTAT	?= $(GO_TOOL) golang.org/x/perf/cmd/benchstat
+
+.PHONY: start
+start: ## Start the application.
+	$(GO_AIR) -c .air.toml
+
+.PHONY: build
+build: ## Build the binary file.
+	$(GO_RELEASER) build --snapshot --clean
 
 .PHONY: release
 release: ## Release the project.
@@ -15,13 +24,20 @@ release: ## Release the project.
 generate: ## Generate code.
 	$(GO) generate ./...
 
+.PHONY: mocks
+mocks: ## Generate mocks.
+	$(GO_TOOL) github.com/vektra/mockery/v2
+
+.PHONY: air
+air: ## Run air.
+	$(GO_AIR) -c .air.toml
+
+.PHONY: start
+start: air ## Run the application.
+
 .PHONY: fmt
 fmt: ## Run go fmt against code.
-	$(GO_RUN_TOOLS) mvdan.cc/gofumpt -w .
-
-.PHONY: bench
-bench: ## Run benchmarks.
-	$(GO) test -bench=. ./...
+	$(GO_TOOL) mvdan.cc/gofumpt -w .
 
 .PHONY: vet
 vet: ## Run go vet against code.
@@ -34,13 +50,24 @@ test: fmt vet ## Run tests.
 
 .PHONY: lint
 lint: ## Run lint.
-	$(GO_RUN_TOOLS) github.com/golangci/golangci-lint/cmd/golangci-lint run --timeout 5m -c .golangci.yml
+	$(GO_LINT) run --timeout 5m -c .golangci.yml
+
+.PHONY: fix
+fix: ## Run lint auto-fixes.
+	$(GO_LINT) run --fix --timeout 5m -c .golangci.yml
+	$(GO) fix -inline ./...
+
+.PHONY: bench
+bench: ## Run benchmarks.
+	$(GO) test -bench=. ./... | $(GO_BENCHSTAT) -
 
 .PHONY: clean
 clean: ## Remove previous build.
-	rm -rf .test .dist
-	find . -type f -name '*.gen.go' -exec rm {} +
-	git checkout go.mod
+	@rm -rf .test .dist
+	@find . -type f -name '*.gen.go' -exec rm {} +
+	@$(GO_LINT) cache clean
+	@$(GO) clean -modcache
+	@git checkout go.mod
 
 .PHONY: help
 help: ## Display this help screen.

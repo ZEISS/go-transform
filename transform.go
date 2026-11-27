@@ -2,6 +2,7 @@ package transform
 
 import (
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 )
@@ -26,7 +27,7 @@ type FieldLevel interface {
 	String() string
 }
 
-// Func transforms the field value
+// Func transforms the field value.
 type Func func(fl FieldLevel) error
 
 var internalTransformers = map[string]Func{
@@ -35,6 +36,13 @@ var internalTransformers = map[string]Func{
 	"rtrim":     trimRightFunc,
 	"lowercase": toLowerCaseFunc,
 	"uppercase": toUpperCaseFunc,
+	"to_slash":  toSlashFunc,
+}
+
+func toSlashFunc(fl FieldLevel) error {
+	SetString(fl, filepath.ToSlash(fl.String()))
+
+	return nil
 }
 
 func toUpperCaseFunc(fl FieldLevel) error {
@@ -76,35 +84,35 @@ type fieldLevel struct {
 	tagName string
 }
 
-// Field returns the current field value
+// Field returns the current field value.
 func (fl fieldLevel) Field() reflect.Value {
 	return fl.val
 }
 
-// FieldName returns the current field name
+// FieldName returns the current field name.
 func (fl fieldLevel) FieldName() string {
 	return fl.field.Name
 }
 
-// GetTag returns the current transform tag
+// GetTag returns the current transform tag.
 func (fl fieldLevel) GetTag() string {
 	return fl.field.Tag.Get(fl.tagName)
 }
 
-// Funcs return the list of tag functions
+// Funcs return the list of tag functions.
 func (fl fieldLevel) Funcs() []string {
 	tag := fl.GetTag()
 	return strings.Split(tag, ",")
 }
 
-// Kind returns the kind of the field
+// Kind returns the kind of the field.
 func (fl fieldLevel) Kind() reflect.Kind {
 	return fl.val.Kind()
 }
 
-// String returns the string value of the field
+// String returns the string value of the field.
 func (fl fieldLevel) String() string {
-	if fl.Kind() == reflect.Ptr {
+	if fl.Kind() == reflect.Pointer {
 		return fl.Field().Elem().String()
 	}
 
@@ -112,17 +120,17 @@ func (fl fieldLevel) String() string {
 }
 
 var (
-	// ErrNoPointer is returned when the interface is not a pointer
+	// ErrNoPointer is returned when the interface is not a pointer.
 	ErrNoPointer = errors.New("transformer: interface must be a pointer")
-	// ErrNoAddressable is returned when the interface is not addressable
+	// ErrNoAddressable is returned when the interface is not addressable.
 	ErrNoAddressable = errors.New("transformer: interface must be addressable (a pointer)")
-	// ErrNoStruct is returned when the interface is not a struct
+	// ErrNoStruct is returned when the interface is not a struct.
 	ErrNoStruct = errors.New("transformer: interface must be a struct")
 )
 
 // Transformer ...
 type Transformer interface {
-	transform(string, interface{}) error
+	transform(string, any) error
 }
 
 // TransformerImpl ...
@@ -142,7 +150,7 @@ func WithTagName(tagName string) TransformerOpt {
 }
 
 // Transform ...
-func Transform(s interface{}) error {
+func Transform(s any) error {
 	t := NewTransformer()
 
 	return t.Transform(s)
@@ -162,14 +170,14 @@ func NewTransformer(opts ...TransformerOpt) *TransformerImpl {
 }
 
 // Transform ...
-func (t *TransformerImpl) Transform(s interface{}) error {
+func (t *TransformerImpl) Transform(s any) error {
 	ifv := reflect.ValueOf(s)
 
 	if ifv.IsNil() {
 		return nil // bail out of if this nil
 	}
 
-	if ifv.Kind() != reflect.Ptr { // we only accept pointer
+	if ifv.Kind() != reflect.Pointer { // we only accept pointer
 		return ErrNoPointer
 	}
 
@@ -185,7 +193,6 @@ func (t *TransformerImpl) Transform(s interface{}) error {
 	return t.transform(ifv)
 }
 
-// this is the heavy lifting
 func (t *TransformerImpl) transform(ifv reflect.Value) error {
 	vif := reflect.Indirect(ifv)
 	vt := vif.Type()
@@ -211,16 +218,14 @@ func (t *TransformerImpl) transform(ifv reflect.Value) error {
 	return t.transformFields(fields...)
 }
 
-// transformField
 func (t *TransformerImpl) transformFields(fields ...FieldLevel) error {
 	for _, f := range fields {
 		k := f.Kind()
 
-		if k == reflect.Ptr {
+		if k == reflect.Pointer {
 			k = f.Field().Elem().Kind()
 		}
 
-		// nolint:exhaustive
 		switch k {
 		case reflect.String:
 			if f.Field().CanSet() {
@@ -251,13 +256,13 @@ func (t *TransformerImpl) transformField(field FieldLevel) error {
 	return nil
 }
 
-// SetString ...
+// SetString is a helper function to set a string value on a field.
 func SetString(f FieldLevel, s string) {
-	if f.Kind() == reflect.Ptr && f.Field().IsNil() {
+	if f.Kind() == reflect.Pointer && f.Field().IsNil() {
 		return // we don't want to set nil
 	}
 
-	if f.Kind() == reflect.Ptr {
+	if f.Kind() == reflect.Pointer {
 		f.Field().Set(reflect.ValueOf(&s))
 	} else {
 		f.Field().SetString(s)
